@@ -1,10 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebERP.Data;
 using WebERP.Models;
 using WebERP.DTOs;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace WebERP.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class OrderDetailController : ControllerBase
@@ -19,6 +23,32 @@ namespace WebERP.Controllers
         [HttpGet]
         public IActionResult GetByOrderId([FromQuery] int orderId)
         {
+            if (User.IsInRole("Customer"))
+            {
+                var claim = User.FindFirst("CustomerId")?.Value;
+                if (!int.TryParse(claim, out int customerId))
+                {
+                    return Forbid();
+                }
+
+                // Verify the customer owns this order
+                bool ownsOrder = false;
+                var dbHelper = HttpContext.RequestServices.GetRequiredService<DbHelper>();
+                using (var conn = dbHelper.GetConnection())
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand("SELECT COUNT(*) FROM SalesOrders WHERE OrderId = @orderId AND CustomerId = @customerId", conn);
+                    cmd.Parameters.AddWithValue("@orderId", orderId);
+                    cmd.Parameters.AddWithValue("@customerId", customerId);
+                    ownsOrder = ((int)cmd.ExecuteScalar()) > 0;
+                }
+
+                if (!ownsOrder)
+                {
+                    return Forbid();
+                }
+            }
+
             var result = repo.GetOrderDetails(orderId);
             return Ok(result);
         }
@@ -30,6 +60,7 @@ namespace WebERP.Controllers
             return Ok(result);
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpPost]
         public IActionResult Create([FromBody] OrderDetailCreateDto dto)
         {
@@ -44,6 +75,7 @@ namespace WebERP.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpPut("{id}")]
         public IActionResult Edit(int id, [FromBody] OrderDetailUpdateDto dto)
         {
@@ -58,6 +90,7 @@ namespace WebERP.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
