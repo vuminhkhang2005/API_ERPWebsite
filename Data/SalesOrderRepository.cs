@@ -1,6 +1,8 @@
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using WebERP.DTOs;
 using WebERP.Models;
 
 namespace WebERP.Data
@@ -14,7 +16,7 @@ namespace WebERP.Data
             this.db = db;
         }
 
-        public object GetSalesOrdersPaged(int page, int size, string searchTerm)
+        public object GetSalesOrdersPaged(int page, int size, string searchTerm, int? customerId = null)
         {
             var list = new List<SalesOrder>();
             int totalRecords = 0;
@@ -27,6 +29,7 @@ namespace WebERP.Data
                 cmd.Parameters.AddWithValue("@page_number", page);
                 cmd.Parameters.AddWithValue("@page_size", size);
                 cmd.Parameters.AddWithValue("@search_term", searchTerm ?? "");
+                cmd.Parameters.AddWithValue("@customer_id", (object)customerId ?? DBNull.Value);
 
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -188,6 +191,45 @@ namespace WebERP.Data
                     {
                         tx.Rollback();
                         throw;
+                    }
+                }
+            }
+        }
+
+        public void EnsureProductsAvailable(IEnumerable<OrderDetailInputDto> details)
+        {
+            var requestedItems = details
+                .GroupBy(d => d.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .ToList();
+
+            if (requestedItems.Count == 0)
+            {
+                throw new Exception("Order must contain at least one product.");
+            }
+
+            using (var conn = db.GetConnection())
+            {
+                conn.Open();
+                foreach (var item in requestedItems)
+                {
+                    using (var cmd = new SqlCommand("SELECT ProductName, ISNULL(StockQty, 0) AS StockQty FROM Products WHERE ProductID = @productId", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@productId", item.ProductId);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                            {
+                                throw new Exception($"Product #{item.ProductId} was not found.");
+                            }
+
+                            string productName = reader["ProductName"]?.ToString() ?? $"Product #{item.ProductId}";
+                            int stockQty = Convert.ToInt32(reader["StockQty"]);
+                            if (item.Quantity > stockQty)
+                            {
+                                throw new Exception($"{productName} has only {stockQty} unit(s) in stock.");
+                            }
+                        }
                     }
                 }
             }

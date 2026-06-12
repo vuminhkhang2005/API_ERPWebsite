@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebERP.Data;
 using WebERP.Models;
@@ -5,6 +6,7 @@ using WebERP.DTOs;
 
 namespace WebERP.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class CustomerController : ControllerBase
@@ -16,6 +18,7 @@ namespace WebERP.Controllers
             this.repo = repo;
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpGet]
         public IActionResult GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, [FromQuery] string search = "")
         {
@@ -23,6 +26,7 @@ namespace WebERP.Controllers
             return Ok(result);
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpGet("{id}")]
         public IActionResult GetById(int id)
         {
@@ -32,6 +36,7 @@ namespace WebERP.Controllers
             return Ok(customer);
         }
 
+        [Authorize(Roles = "Admin,Employee")]
         [HttpGet("find")]
         public IActionResult Find([FromQuery] string find)
         {
@@ -46,6 +51,7 @@ namespace WebERP.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public IActionResult Create([FromBody] CustomerCreateDto dto)
         {
@@ -60,6 +66,7 @@ namespace WebERP.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
         public IActionResult Edit(int id, [FromBody] CustomerUpdateDto dto)
         {
@@ -74,6 +81,7 @@ namespace WebERP.Controllers
             }
         }
         
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
